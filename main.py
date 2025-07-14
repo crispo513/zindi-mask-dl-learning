@@ -1,4 +1,5 @@
 # Importing the relevant libraries
+import tensorflow as tf
 import numpy as np
 import pandas as pd
 import cv2
@@ -43,6 +44,10 @@ plt.show()
 
 train_labels["target"] = train_labels["target"].replace({0: 'unmask', 1: 'mask'})
 
+
+print("Num GPUs Available:", len(tf.config.list_physical_devices('GPU')))
+print("GPU devices:", tf.config.list_physical_devices('GPU'))
+
 # Defining how data is passed to the input layer
 image_size = 224
 input_shape = (image_size, image_size, 3)
@@ -68,7 +73,7 @@ model.summary()
 
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 earlystop = EarlyStopping(patience=10)
-learning_rate_reduction = ReduceLROnPlateau(monitor='val_acc',patience=2,verbose=1,factor=0.5,min_lr=0.00001)
+learning_rate_reduction = ReduceLROnPlateau(monitor='val_accuracy',patience=2,verbose=1,factor=0.5,min_lr=0.00001)
 callbacks = [earlystop, learning_rate_reduction]
 
 from sklearn.model_selection import train_test_split
@@ -88,6 +93,81 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator, load_img
 # Categorical encodes categorical variables
 from tensorflow.keras.utils import to_categorical
 
+# Here we are formatting the training data
+train_datagen = ImageDataGenerator(rotation_range=15,
+                                 rescale=1./255,
+                                 shear_range=0.1,
+                                 zoom_range=0.2, # zoom range (1-0.2 to 1+0.2)
+                                 horizontal_flip=True,
+                                 width_shift_range=0.1,
+                                 height_shift_range=0.1)
+train_generator = train_datagen.flow_from_dataframe(dataframe=train_df,
+                                                  directory="images/",
+                                                  x_col="image",
+                                                  y_col="target",
+                                                  target_size=(image_size,image_size),
+                                                  class_mode='categorical',
+                                                  batch_size=15)
+# Here we are formatting images on the validation data
+validation_datagen = ImageDataGenerator(rescale=1./255)
+validation_generator = validation_datagen.flow_from_dataframe(validate_df,
+                                                  directory="images/",
+                                                  x_col="image",
+                                                  y_col="target",
+                                                  target_size=(image_size,image_size),
+                                                  class_mode='categorical',
+                                                  batch_size=15)
+
+epochs = 100
+total_validate = validate_df.shape[0]
+total_train = train_df.shape[0]
+history = model.fit(
+    train_generator,
+    epochs=epochs,
+    validation_data=validation_generator,
+    validation_steps=total_validate // batch_size,
+    steps_per_epoch=total_train // batch_size,
+    callbacks=callbacks,
+)
+
+# Here we are creating a list of pictures - we are appending images on the list.
+# Our data source is the original data before splitting to test and train data
+target = []
+for i in data:
+    flag = 0
+    for j in train_df["image"]:    # ????
+        if (i == j):
+            flag = 1
+            break
+        else:
+            continue
+    if (flag == 0):
+        target.append(i)
+
+#creating a test dataframe with images and the target is umask for all images
+test = pd.DataFrame({
+    'image': target,
+    'target':"unmask"
+})
+test.head()
+
+test_gen = ImageDataGenerator(rescale=1./255)
+test_generator = test_gen.flow_from_dataframe(
+    test,
+    directory="images/",
+    x_col="image",
+    y_col="target",
+    target_size=(image_size,image_size),
+    class_mode='categorical',
+    batch_size=15,
+    shuffle=False)
+nb_samples = test.shape[0]
+predict = model.predict(test_generator, steps=np.ceil(nb_samples/batch_size))
+
+# Here we are converting the submission data to a dataframe
+test["target"]=predict
+#here we are converting to a csv file
+test.to_csv("submission.csv",index=False)
 
 
 # Rezip and delete unused folder (Unused due to git and Github LFS characteristics)
