@@ -28,8 +28,9 @@ train_labels['target'].value_counts().plot.bar()
 plt.show()
 
 # Unzipping training data folder
-with zipfile.ZipFile("images.zip", 'r') as zip_ref:
-    zip_ref.extractall("images")
+#with zipfile.ZipFile("images.zip", 'r') as zip_ref:
+#    zip_ref.extractall("images")
+#
 
 # List and select random image from training data
 data = os.listdir("images")
